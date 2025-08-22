@@ -1,0 +1,130 @@
+// service/ChatService.java
+package com.example.chat.service;
+
+import com.example.chat.dto.MessageDto;
+import com.example.chat.dto.SendMessageRequest;
+import com.example.chat.exception.ConflictException;
+import com.example.chat.exception.NotFoundException;
+import com.example.chat.util.Keys;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+import org.springframework.data.redis.core.StringRedisTemplate;
+
+import java.time.Instant;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+public class ChatService {
+
+  private final StringRedisTemplate redis;
+  private final ObjectMapper mapper = new ObjectMapper();
+
+  public ChatService(StringRedisTemplate redis) {
+    this.redis = redis;
+  }
+
+  public Map<String,Object> createRoom(String roomName, String roomIdOpt) {
+    String roomId = StringUtils.hasText(roomIdOpt)
+        ? sanitize(roomIdOpt) : sanitize(roomName);
+    String metaKey = Keys.roomMeta(roomId);
+
+    // Uniqueness: room meta hash must not exist
+    if (Boolean.TRUE.equals(redis.hasKey(metaKey))) {
+      throw new ConflictException("Duplicate chat room name/id: " + roomId);
+    }
+
+    redis.opsForHash().put(metaKey, "name", roomName);
+    redis.opsForHash().put(metaKey, "createdAt", Instant.now().toString());
+
+    return Map.of(
+      "message", "Chat room %s created successfully".formatted(roomId),
+      "roomId", roomId,
+      "status", "success"
+    );
+  }
+
+  public Map<String,Object> joinRoom(String roomId, String participant) {
+    ensureRoom(roomId);
+    String participantsKey = Keys.roomParticipants(roomId);
+    Long added = redis.opsForSet().add(participantsKey, participant);
+    return Map.of(
+      "message", "User %s joined chat room %s".formatted(participant, roomId),
+      "status", "success",
+      "alreadyMember", added != null && added == 0 ? true : false
+    );
+  }
+
+  public Map<String,Object> sendMessage(String roomId, SendMessageRequest req) {
+    ensureRoom(roomId);
+    // Optional: ensure participant joined (can relax if not required)
+    String participantsKey = Keys.roomParticipants(roomId);
+    Boolean isMember = redis.opsForSet().isMember(participantsKey, req.participant());
+    if (Boolean.FALSE.equals(isMember)) {
+      // Auto-join, or throw. Here we throw to match “unauthorized actions” robustness.
+      throw new ConflictException("Participant not in room: " + req.participant());
+    }
+
+    MessageDto msg = new MessageDto(
+      req.participant(),
+      req.message(),
+      Instant.now().toString()
+    );
+
+    String json = toJson(msg);
+    // Append to list
+    redis.opsForList().rightPush(Keys.roomMessages(roomId), json);
+    // Publish to channel
+    redis.convertAndSend(Keys.channel(roomId), json);
+
+    return Map.of("message","Message sent successfully.","status","success");
+  }
+
+  public List<MessageDto> getMessages(String roomId, Integer limit) {
+    ensureRoom(roomId);
+    String listKey = Keys.roomMessages(roomId);
+
+    long size = Optional.ofNullable(redis.opsForList().size(listKey)).orElse(0L);
+    if (size == 0) return List.of();
+
+    long count = (limit == null || limit <= 0) ? size : Math.min(size, limit);
+    // Fetch last N messages: range from size-count to size-1
+    long start = size - count;
+    List<String> raw = redis.opsForList().range(listKey, start, size - 1);
+    if (raw == null) return List.of();
+
+    return raw.stream().map(this::fromJson).collect(Collectors.toList());
+  }
+
+  public Map<String,Object> deleteRoom(String roomId) {
+    ensureRoom(roomId);
+    Long deleted = redis.delete(Arrays.asList(
+      Keys.roomMeta(roomId),
+      Keys.roomParticipants(roomId),
+      Keys.roomMessages(roomId)
+    ));
+    return Map.of("message","Room deleted","deletedKeys", deleted);
+  }
+
+  private void ensureRoom(String roomId) {
+    if (!Boolean.TRUE.equals(redis.hasKey(Keys.roomMeta(roomId)))) {
+      throw new NotFoundException("Chat room not found: " + roomId);
+    }
+  }
+
+  private String sanitize(String v) {
+    return v.trim().toLowerCase().replaceAll("[^a-z0-9\\-]", "-");
+  }
+
+  private String toJson(MessageDto dto) {
+    try { return mapper.writeValueAsString(dto); }
+    catch (JsonProcessingException e) { throw new RuntimeException(e); }
+  }
+
+  private MessageDto fromJson(String json) {
+    try { return mapper.readValue(json, MessageDto.class); }
+    catch (JsonProcessingException e) { throw new RuntimeException(e); }
+  }
+}
