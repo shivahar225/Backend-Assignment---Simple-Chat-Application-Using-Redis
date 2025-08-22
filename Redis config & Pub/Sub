@@ -1,0 +1,40 @@
+// config/RedisConfig.java
+package com.example.chat.config;
+
+import com.example.chat.service.PubSubSubscriber;
+import org.springframework.context.annotation.*;
+import org.springframework.data.redis.connection.*;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.core.*;
+import org.springframework.data.redis.listener.*;
+import org.springframework.data.redis.listener.adapter.MessageListenerAdapter;
+
+@Configuration
+public class RedisConfig {
+
+  @Bean
+  public RedisConnectionFactory connectionFactory() {
+    return new LettuceConnectionFactory(); // host/port from application.yml
+  }
+
+  @Bean
+  public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory cf) {/
+    return new StringRedisTemplate(cf);
+  }
+
+  @Bean
+  public RedisMessageListenerContainer container(
+      RedisConnectionFactory cf,
+      MessageListenerAdapter listenerAdapter) {
+    RedisMessageListenerContainer container = new RedisMessageListenerContainer();
+    container.setConnectionFactory(cf);
+    // Wildcard subscription to all room channels
+    container.addMessageListener(listenerAdapter, new PatternTopic("channel:room:*"));
+    return container;
+  }
+
+  @Bean
+  public MessageListenerAdapter listenerAdapter(PubSubSubscriber subscriber) {
+    return new MessageListenerAdapter(subscriber, "onMessage");
+  }
+}
