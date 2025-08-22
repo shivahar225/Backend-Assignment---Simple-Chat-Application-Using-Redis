@@ -1,0 +1,16 @@
+redis-chat/
+ ├─ pom.xml
+ ├─ src/main/java/com/example/chat/
+ │  ├─ ChatApplication.java
+ │  ├─ config/RedisConfig.java
+ │  ├─ controller/ChatController.java
+ │  ├─ dto/CreateRoomRequest.java
+ │  ├─ dto/JoinRoomRequest.java
+ │  ├─ dto/SendMessageRequest.java
+ │  ├─ dto/MessageDto.java
+ │  ├─ service/ChatService.java
+ │  ├─ service/PubSubSubscriber.java
+ │  ├─ util/Keys.java
+ │  └─ exception/{ApiException, NotFoundException, ConflictException, GlobalExceptionHandler}.java
+ ├─ src/test/java/com/example/chat/ (JUnit tests)
+ └─ docker-compose.yml
