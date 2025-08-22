@@ -1,0 +1,10 @@
+// util/Keys.java
+package com.example.chat.util;
+
+public final class Keys {
+  private Keys(){}
+  public static String roomMeta(String roomId) { return "room:meta:" + roomId; }
+  public static String roomParticipants(String roomId) { return "room:participants:" + roomId; }
+  public static String roomMessages(String roomId) { return "room:messages:" + roomId; }
+  public static String channel(String roomId) { return "channel:room:" + roomId; }
+}
