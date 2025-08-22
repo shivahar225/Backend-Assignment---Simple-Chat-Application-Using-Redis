@@ -1,0 +1,57 @@
+// controller/ChatController.java
+package com.example.chat.controller;
+
+import com.example.chat.dto.*;
+import com.example.chat.service.ChatService;
+import jakarta.validation.Valid;
+import org.springframework.http.*;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/chatapp")
+public class ChatController {
+
+  private final ChatService service;
+  public ChatController(ChatService service){ this.service = service; }
+
+  // 1) Create room
+  @PostMapping("/chatrooms")
+  public ResponseEntity<Map<String,Object>> create(@Valid @RequestBody CreateRoomRequest body){
+    var res = service.createRoom(body.roomName(), body.roomId());
+    return ResponseEntity.status(HttpStatus.CREATED).body(res);
+  }
+
+  // 2) Join room
+  @PostMapping("/chatrooms/{roomId}/join")
+  public ResponseEntity<Map<String,Object>> join(
+      @PathVariable String roomId,
+      @Valid @RequestBody JoinRoomRequest body){
+    return ResponseEntity.ok(service.joinRoom(roomId, body.participant()));
+  }
+
+  // 3) Send message
+  @PostMapping("/chatrooms/{roomId}/messages")
+  public ResponseEntity<Map<String,Object>> send(
+      @PathVariable String roomId,
+      @Valid @RequestBody SendMessageRequest body){
+    return ResponseEntity.ok(service.sendMessage(roomId, body));
+  }
+
+  // 4) Retrieve chat history
+  @GetMapping("/chatrooms/{roomId}/messages")
+  public ResponseEntity<Map<String,Object>> history(
+      @PathVariable String roomId,
+      @RequestParam(required = false) Integer limit){
+    List<MessageDto> messages = service.getMessages(roomId, limit);
+    return ResponseEntity.ok(Map.of("messages", messages));
+  }
+
+  // Optional: delete room
+  @DeleteMapping("/chatrooms/{roomId}")
+  public ResponseEntity<Map<String,Object>> delete(@PathVariable String roomId){
+    return ResponseEntity.ok(service.deleteRoom(roomId));
+  }
+}
