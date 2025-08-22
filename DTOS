@@ -1,0 +1,32 @@
+// dto/CreateRoomRequest.java
+package com.example.chat.dto;
+import jakarta.validation.constraints.NotBlank;
+
+public record CreateRoomRequest(
+  @NotBlank String roomName,
+  String roomId // optional; if null, use roomName as id (kebab-case)
+) {}
+
+// dto/JoinRoomRequest.java
+package com.example.chat.dto;
+import jakarta.validation.constraints.NotBlank;
+
+public record JoinRoomRequest(@NotBlank String participant) {}
+
+// dto/SendMessageRequest.java
+package com.example.chat.dto;
+import jakarta.validation.constraints.NotBlank;
+
+public record SendMessageRequest(
+  @NotBlank String participant,
+  @NotBlank String message
+) {}
+
+// dto/MessageDto.java
+package com.example.chat.dto;
+
+public record MessageDto(
+  String participant,
+  String message,
+  String timestamp // ISO-8601 string
+) {}
